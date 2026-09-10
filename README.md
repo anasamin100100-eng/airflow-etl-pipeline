@@ -1,173 +1,261 @@
-# docker-airflow
-[![CI status](https://github.com/puckel/docker-airflow/workflows/CI/badge.svg?branch=master)](https://github.com/puckel/docker-airflow/actions?query=workflow%3ACI+branch%3Amaster+event%3Apush)
-[![Docker Build status](https://img.shields.io/docker/build/puckel/docker-airflow?style=plastic)](https://hub.docker.com/r/puckel/docker-airflow/tags?ordering=last_updated)
+# Dockerized Apache Airflow ETL Pipeline
+
+A Dockerized **Apache Airflow ETL pipeline** that extracts data from a CSV file, cleans and preprocesses the data using Python and Pandas, performs data aggregation, stores the results in MySQL, and sends an email notification after the workflow completes.
+
+## 🚀 Project Overview
+
+This project demonstrates a complete ETL workflow using Apache Airflow and Docker.
+
+The pipeline performs the following steps:
+
+```text
+CSV Dataset
+    ↓
+Check Input File
+    ↓
+Preprocess Data
+    ↓
+Aggregate Data
+    ↓
+Create MySQL Table
+    ↓
+Insert Aggregated Data
+    ↓
+Send Email Notification
+```
+
+## 🛠️ Technologies Used
+
+* **Apache Airflow 1.10.9**
+* **Docker**
+* **Docker Compose**
+* **Python**
+* **Pandas**
+* **MySQL 5.7**
+* **PostgreSQL 9.6**
+* **SMTP / Gmail**
+* **LocalExecutor**
+
+## 📂 Project Structure
+
+```text
+docker-airflow-master/
+│
+├── dags/
+│   ├── first_workflow.py
+│   ├── pre_process.py
+│   └── ...
+│
+├── ip_files/
+│   └── .gitkeep
+│
+├── op_files/
+│   └── .gitkeep
+│
+├── mysql_data/
+│   └── .gitkeep
+│
+├── docker-compose-LocalExecutor.yml
+├── mysql.cnf
+├── .env.example
+├── .gitignore
+└── README.md
+```
 
-[![Docker Hub](https://img.shields.io/badge/docker-ready-blue.svg)](https://hub.docker.com/r/puckel/docker-airflow/)
-[![Docker Pulls](https://img.shields.io/docker/pulls/puckel/docker-airflow.svg)]()
-[![Docker Stars](https://img.shields.io/docker/stars/puckel/docker-airflow.svg)]()
+## 📊 Input Dataset
 
-This repository contains **Dockerfile** of [apache-airflow](https://github.com/apache/incubator-airflow) for [Docker](https://www.docker.com/)'s [automated build](https://registry.hub.docker.com/u/puckel/docker-airflow/) published to the public [Docker Hub Registry](https://registry.hub.docker.com/).
+The pipeline processes a CSV dataset containing the following columns:
 
-## Informations
+```text
+InvoiceNo
+StockCode
+Description
+Quantity
+InvoiceDate
+UnitPrice
+CustomerID
+Country
+```
 
-* Based on Python (3.7-slim-buster) official Image [python:3.7-slim-buster](https://hub.docker.com/_/python/) and uses the official [Postgres](https://hub.docker.com/_/postgres/) as backend and [Redis](https://hub.docker.com/_/redis/) as queue
-* Install [Docker](https://www.docker.com/)
-* Install [Docker Compose](https://docs.docker.com/compose/install/)
-* Following the Airflow release from [Python Package Index](https://pypi.python.org/pypi/apache-airflow)
+The input file is placed inside:
 
-## Installation
+```text
+ip_files/or.csv
+```
 
-Pull the image from the Docker repository.
+For security and repository size reasons, the actual dataset can be excluded from Git using `.gitignore`.
 
-    docker pull puckel/docker-airflow
+## 🔄 ETL Workflow
 
-## Build
+### 1. Check Input File
 
-Optionally install [Extra Airflow Packages](https://airflow.incubator.apache.org/installation.html#extra-package) and/or python dependencies at build time :
+Airflow first checks whether the input file is available before continuing with the pipeline.
 
-    docker build --rm --build-arg AIRFLOW_DEPS="datadog,dask" -t puckel/docker-airflow .
-    docker build --rm --build-arg PYTHON_DEPS="flask_oauthlib>=0.9" -t puckel/docker-airflow .
+### 2. Preprocess Data
 
-or combined
+The preprocessing task:
 
-    docker build --rm --build-arg AIRFLOW_DEPS="datadog,dask" --build-arg PYTHON_DEPS="flask_oauthlib>=0.9" -t puckel/docker-airflow .
+* Reads the CSV file using Pandas
+* Handles the dataset encoding
+* Cleans the `Description` column
+* Removes missing values
+* Creates a cleaned dataset
 
-Don't forget to update the airflow images in the docker-compose files to puckel/docker-airflow:latest.
+The processed file is generated as:
 
-## Usage
+```text
+ip_files/or1.csv
+```
 
-By default, docker-airflow runs Airflow with **SequentialExecutor** :
+### 3. Aggregate Data
 
-    docker run -d -p 8080:8080 puckel/docker-airflow webserver
+The aggregation task calculates:
 
-If you want to run another executor, use the other docker-compose.yml files provided in this repository.
+```text
+total_price = UnitPrice × Quantity
+```
 
-For **LocalExecutor** :
+The data is then grouped by:
 
-    docker-compose -f docker-compose-LocalExecutor.yml up -d
+```text
+StockCode
+Description
+Country
+```
 
-For **CeleryExecutor** :
+The aggregated result is saved for loading into MySQL.
 
-    docker-compose -f docker-compose-CeleryExecutor.yml up -d
+### 4. Create MySQL Table
 
-NB : If you want to have DAGs example loaded (default=False), you've to set the following environment variable :
+Airflow uses `MySqlOperator` to create the destination table:
 
-`LOAD_EX=n`
+```sql
+CREATE TABLE IF NOT EXISTS aggre_res (
+    stock_code varchar(100) NULL,
+    descb varchar(100) NULL,
+    country varchar(100) NULL,
+    total_price varchar(100) NULL
+);
+```
 
-    docker run -d -p 8080:8080 -e LOAD_EX=y puckel/docker-airflow
+### 5. Insert Data into MySQL
 
-If you want to use Ad hoc query, make sure you've configured connections:
-Go to Admin -> Connections and Edit "postgres_default" set this values (equivalent to values in airflow.cfg/docker-compose*.yml) :
-- Host : postgres
-- Schema : airflow
-- Login : airflow
-- Password : airflow
+The aggregated CSV data is loaded into the MySQL table using:
 
-For encrypted connection passwords (in Local or Celery Executor), you must have the same fernet_key. By default docker-airflow generates the fernet_key at startup, you have to set an environment variable in the docker-compose (ie: docker-compose-LocalExecutor.yml) file to set the same key accross containers. To generate a fernet_key :
+```sql
+LOAD DATA INFILE
+```
 
-    docker run puckel/docker-airflow python -c "from cryptography.fernet import Fernet; FERNET_KEY = Fernet.generate_key().decode(); print(FERNET_KEY)"
+### 6. Email Notification
 
-## Configuring Airflow
+After the ETL workflow completes, Airflow sends an email notification using SMTP.
 
-It's possible to set any configuration value for Airflow from environment variables, which are used over values from the airflow.cfg.
+## 🐳 Running the Project
 
-The general rule is the environment variable should be named `AIRFLOW__<section>__<key>`, for example `AIRFLOW__CORE__SQL_ALCHEMY_CONN` sets the `sql_alchemy_conn` config option in the `[core]` section.
+### Prerequisites
 
-Check out the [Airflow documentation](http://airflow.readthedocs.io/en/latest/howto/set-config.html#setting-configuration-options) for more details
+Install:
 
-You can also define connections via environment variables by prefixing them with `AIRFLOW_CONN_` - for example `AIRFLOW_CONN_POSTGRES_MASTER=postgres://user:password@localhost:5432/master` for a connection called "postgres_master". The value is parsed as a URI. This will work for hooks etc, but won't show up in the "Ad-hoc Query" section unless an (empty) connection is also created in the DB
+* Docker Desktop
+* Git
 
-## Custom Airflow plugins
+Make sure Docker Desktop is running before starting the project.
 
-Airflow allows for custom user-created plugins which are typically found in `${AIRFLOW_HOME}/plugins` folder. Documentation on plugins can be found [here](https://airflow.apache.org/plugins.html)
+### Clone the Repository
 
-In order to incorporate plugins into your docker container
-- Create the plugins folders `plugins/` with your custom plugins.
-- Mount the folder as a volume by doing either of the following:
-    - Include the folder as a volume in command-line `-v $(pwd)/plugins/:/usr/local/airflow/plugins`
-    - Use docker-compose-LocalExecutor.yml or docker-compose-CeleryExecutor.yml which contains support for adding the plugins folder as a volume
+```bash
+git clone https://github.com/YOUR_USERNAME/YOUR_REPOSITORY.git
+cd YOUR_REPOSITORY
+```
 
-## Install custom python package
+### Configure Environment Variables
 
-- Create a file "requirements.txt" with the desired python modules
-- Mount this file as a volume `-v $(pwd)/requirements.txt:/requirements.txt` (or add it as a volume in docker-compose file)
-- The entrypoint.sh script execute the pip install command (with --user option)
+Create a `.env` file based on `.env.example`:
 
-## UI Links
+```bash
+copy .env.example .env
+```
 
-- Airflow: [localhost:8080](http://localhost:8080/)
-- Flower: [localhost:5555](http://localhost:5555/)
+Add your own credentials and configuration values to `.env`.
 
+**Do not commit `.env` to GitHub.**
 
-## Scale the number of workers
+### Start the Containers
 
-Easy scaling using docker-compose:
+This project uses a custom Compose filename:
 
-    docker-compose -f docker-compose-CeleryExecutor.yml scale worker=5
+```bash
+docker compose -f docker-compose-LocalExecutor.yml up -d
+```
 
-This can be used to scale to a multi node setup using docker swarm.
+Check the running containers:
 
-## Running other airflow commands
+```bash
+docker compose -f docker-compose-LocalExecutor.yml ps
+```
 
-If you want to run other airflow sub-commands, such as `list_dags` or `clear` you can do so like this:
+### Open Airflow
 
-    docker run --rm -ti puckel/docker-airflow airflow list_dags
+Once the containers are running, open:
 
-or with your docker-compose set up like this:
+```text
+http://localhost:8080
+```
 
-    docker-compose -f docker-compose-CeleryExecutor.yml run --rm webserver airflow list_dags
+## 📈 Airflow DAG
 
-You can also use this to run a bash shell or any other command in the same environment that airflow would be run in:
+The main workflow follows this dependency chain:
 
-    docker run --rm -ti puckel/docker-airflow bash
-    docker run --rm -ti puckel/docker-airflow ipython
+```text
+check_file
+    ↓
+pre_process
+    ↓
+agg
+    ↓
+create_table
+    ↓
+insert_db
+    ↓
+send_email
+```
 
-# Simplified SQL database configuration using PostgreSQL
+Each task is managed and monitored through the Airflow web interface.
 
-If the executor type is set to anything else than *SequentialExecutor* you'll need an SQL database.
-Here is a list of PostgreSQL configuration variables and their default values. They're used to compute
-the `AIRFLOW__CORE__SQL_ALCHEMY_CONN` and `AIRFLOW__CELERY__RESULT_BACKEND` variables when needed for you
-if you don't provide them explicitly:
+## 🔐 Security
 
-| Variable            | Default value |  Role                |
-|---------------------|---------------|----------------------|
-| `POSTGRES_HOST`     | `postgres`    | Database server host |
-| `POSTGRES_PORT`     | `5432`        | Database server port |
-| `POSTGRES_USER`     | `airflow`     | Database user        |
-| `POSTGRES_PASSWORD` | `airflow`     | Database password    |
-| `POSTGRES_DB`       | `airflow`     | Database name        |
-| `POSTGRES_EXTRAS`   | empty         | Extras parameters    |
+Sensitive credentials are stored using environment variables.
 
-You can also use those variables to adapt your compose file to match an existing PostgreSQL instance managed elsewhere.
+The following files should **not** be committed:
 
-Please refer to the Airflow documentation to understand the use of extras parameters, for example in order to configure
-a connection that uses TLS encryption.
+```text
+.env
+mysql_data/
+logs/
+airflow.db
+```
 
-Here's an important thing to consider:
+The repository contains `.env.example` as a template for configuration.
 
-> When specifying the connection as URI (in AIRFLOW_CONN_* variable) you should specify it following the standard syntax of DB connections,
-> where extras are passed as parameters of the URI (note that all components of the URI should be URL-encoded).
+## 🎯 Learning Objectives
 
-Therefore you must provide extras parameters URL-encoded, starting with a leading `?`. For example:
+This project was created to practice:
 
-    POSTGRES_EXTRAS="?sslmode=verify-full&sslrootcert=%2Fetc%2Fssl%2Fcerts%2Fca-certificates.crt"
+* Apache Airflow DAG development
+* ETL pipeline design
+* Data preprocessing with Pandas
+* Data aggregation
+* MySQL integration with Airflow
+* Docker and Docker Compose
+* Airflow operators
+* Environment variable configuration
+* SMTP email notifications
+* Task dependency management
 
-# Simplified Celery broker configuration using Redis
+## 👨‍💻 Author
 
-If the executor type is set to *CeleryExecutor* you'll need a Celery broker. Here is a list of Redis configuration variables
-and their default values. They're used to compute the `AIRFLOW__CELERY__BROKER_URL` variable for you if you don't provide
-it explicitly:
+**Anas Amin**
 
-| Variable          | Default value | Role                           |
-|-------------------|---------------|--------------------------------|
-| `REDIS_PROTO`     | `redis://`    | Protocol                       |
-| `REDIS_HOST`      | `redis`       | Redis server host              |
-| `REDIS_PORT`      | `6379`        | Redis server port              |
-| `REDIS_PASSWORD`  | empty         | If Redis is password protected |
-| `REDIS_DBNUM`     | `1`           | Database number                |
+BS Computer Science — KIET
 
-You can also use those variables to adapt your compose file to match an existing Redis instance managed elsewhere.
-
-# Wanna help?
-
-Fork, improve and PR.
+GitHub: https://github.com/anasamin100100-eng
