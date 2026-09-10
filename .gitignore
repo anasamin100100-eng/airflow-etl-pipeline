@@ -1,0 +1,86 @@
+### Vim ###
+[._]*.s[a-w][a-z]
+[._]s[a-w][a-z]
+*.un~
+Session.vim
+.netrwhist
+*~
+
+### SublimeText ###
+# cache files for sublime text
+*.tmlanguage.cache
+*.tmPreferences.cache
+*.stTheme.cache
+
+# workspace files are user-specific
+*.sublime-workspace
+
+# project files should be checked into the repository, unless a significant
+# proportion of contributors will probably not be using SublimeText
+# *.sublime-project
+
+# sftp configuration file
+sftp-config.json
+
+# Python
+__pycache__
+
+# =========================
+# Environment / Secrets
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+.venv/
+venv/
+env/
+
+# =========================
+# Airflow
+# =========================
+airflow.cfg
+airflow-webserver.pid
+airflow.db
+logs/
+
+# Airflow generated files
+*.log
+
+# =========================
+# MySQL
+# =========================
+mysql_data/
+
+# =========================
+# Input / Output data
+# =========================
+# Ignore generated/processed CSV files
+op_files/
+ip_files/*.csv
+
+# Keep the folder structure
+!ip_files/.gitkeep
+!op_files/.gitkeep
+
+# =========================
+# IDE / Editor
+# =========================
+.vscode/
+.idea/
+
+# =========================
+# OS files
+# =========================
+.DS_Store
+Thumbs.db
+desktop.ini
